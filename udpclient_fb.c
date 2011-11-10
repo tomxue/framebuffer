@@ -1,17 +1,28 @@
-#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <string.h>
+#include <netinet/in.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+//for framebuffer
+#include <unistd.h>	
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <sys/mman.h>
-#include <stdlib.h>
-int main()
+
+#define MAXLINE 38400
+#define SERV_PORT 8886
+
+int fb_set(char *fb_data)
 {
         int fbfd = 0;
         struct fb_var_screeninfo vinfo;
         struct fb_fix_screeninfo finfo;
         long int screensize = 0;
         char *fbp = 0;
-	  char fbvalue[2000000];
         int x = 0, y = 0;
         long int location = 0;
         int sav=0;
@@ -62,24 +73,76 @@ int main()
 			exit(4);
         	}
         printf("The framebuffer device was mapped to memory successfully.\n");
-	printf("fbp=%d\n",fbp);
+		printf("fbp=%p\n",fbp);
 
 	//memset(fbp,0,screensize);
         
 	/* Where we are going to put the pixel */
 	// wrong formula: location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) + (y+vinfo.yoffset) * finfo.line_length; 
 
-	for(location=0;location<screensize;location++)
-	{
-		fbvalue[location] = *(fbp + location);
-	}
 	for(location=0;location<screensize;location++)	    
 	{	
-        	*(fbp + location) = fbvalue[screensize -2 -location]; //*(fbp + screensize -2 -location); //0xbb; /* blue color depth */
+        	*(fbp + location) = *(fb_data+location); //*(fbp + screensize -2 -location); //0xbb; /* blue color depth */
 	}
   
   
       munmap(fbp, screensize);  /* release the memory */
       close(fbfd); 
       return 0;
+}
+
+
+
+int main(int argc, char **argv)
+{
+    int sockfd;
+    struct sockaddr_in servaddr;
+    int n;
+    char recv_data[MAXLINE];
+    
+    /* check args */
+    if(argc != 2)
+    {
+        printf("usage: udpclient <IPaddress>\n");
+        exit(1);
+    }
+    
+    /* init servaddr */
+    bzero(&servaddr, sizeof(servaddr));
+    //#define AF_INET 2, Internet IP Protocol
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(SERV_PORT);
+    if(inet_pton(AF_INET, argv[1], &servaddr.sin_addr) <= 0)
+    {
+        printf("[%s] is not a valid IPaddress\n", argv[1]);
+        exit(1);
+    }
+    
+    sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);    
+
+    
+    
+    /* connect to server */
+    if(connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
+    {
+        perror("connect error");
+        exit(1);
+    }
+	else
+		printf("connect OK...\n");
+
+	
+        /* receive data from server */
+        n = read(sockfd, recv_data, MAXLINE);
+        if(n == -1)
+        {
+            perror("read error");
+            exit(1);
+        }
+		else
+			printf("read OK...");
+		
+	fb_set(recv_data);
+   
+    return 0;
 }

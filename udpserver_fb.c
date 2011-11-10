@@ -1,20 +1,31 @@
-#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <string.h>
+#include <netinet/in.h>
 #include <stdio.h>
+#include <stdlib.h>
+
+#include <unistd.h>
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <sys/mman.h>
-#include <stdlib.h>
-int main()
+
+#define MAXLINE 384000
+#define SERV_PORT 8886
+
+char fb_data[2000000];
+
+int fb_get()
 {
         int fbfd = 0;
         struct fb_var_screeninfo vinfo;
         struct fb_fix_screeninfo finfo;
         long int screensize = 0;
         char *fbp = 0;
-	  char fbvalue[2000000];
         int x = 0, y = 0;
         long int location = 0;
         int sav=0;
+		
  
         /* open device*/
         fbfd = open("/dev/fb0", O_RDWR);
@@ -62,24 +73,63 @@ int main()
 			exit(4);
         	}
         printf("The framebuffer device was mapped to memory successfully.\n");
-	printf("fbp=%d\n",fbp);
+	printf("fbp=%p\n",fbp);
 
 	//memset(fbp,0,screensize);
         
 	/* Where we are going to put the pixel */
 	// wrong formula: location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) + (y+vinfo.yoffset) * finfo.line_length; 
 
-	for(location=0;location<screensize;location++)
-	{
-		fbvalue[location] = *(fbp + location);
-	}
 	for(location=0;location<screensize;location++)	    
 	{	
-        	*(fbp + location) = fbvalue[screensize -2 -location]; //*(fbp + screensize -2 -location); //0xbb; /* blue color depth */
-	}
-  
+        	fb_data[location] = *(fbp + location); //*(fbp + screensize -2 -location); //0xbb; /* blue color depth */
+	} 
   
       munmap(fbp, screensize);  /* release the memory */
       close(fbfd); 
-      return 0;
+      return screensize;
 }
+
+
+int main(void)
+{
+    int sockfd;
+    struct sockaddr_in servaddr, cliaddr;
+	int n,i,m;
+    socklen_t len;
+    char mesg[MAXLINE];
+
+    //SOCK_DGRAM: Connectionless, unreliable datagrams of fixed maximum length.
+    //IPPROTO_UDP = 17, User Datagram Protocol.
+    //IPPROTO_IP = 0, Dummy protocol for TCP.
+    sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); /* create a socket */
+
+    /* init servaddr */
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    //Convert the host byte order to network byte order
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    servaddr.sin_port = htons(SERV_PORT);
+
+    /* bind address and port to socket */
+    if(bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
+    {
+        perror("bind error");
+        exit(1);
+    }
+
+
+    len = sizeof(cliaddr);
+	
+	sleep(2);
+	n = fb_get();
+	printf("the screen size is %d\n", n);
+		/* sent data back to client */
+	for(i=0;i<n;i=i+100){
+		m =	sendto(sockfd, (fb_data+i), 100, 0, (struct sockaddr *)&cliaddr, len);
+		printf("really send %d bytes\n",m);
+	}
+
+    return 0;
+}
+
