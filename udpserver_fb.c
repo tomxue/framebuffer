@@ -10,8 +10,8 @@
 #include <linux/fb.h>
 #include <sys/mman.h>
 
-#define MAXLINE 384000
-#define SERV_PORT 8886
+#define MAXLINE 80
+#define SERV_PORT 8888
 
 char fb_data[2000000];
 
@@ -61,6 +61,7 @@ int fb_get()
 
         /* Figure out the size of the screen in bytes */
         screensize = vinfo.yres_virtual * finfo.line_length;
+		printf("screensize is %d\n", screensize);
 	//screensize = finfo.smem_len;  //same to above formula
         int bytes_per_pixel = vinfo.bits_per_pixel/8;
         
@@ -90,12 +91,11 @@ int fb_get()
       return screensize;
 }
 
-
 int main(void)
 {
     int sockfd;
     struct sockaddr_in servaddr, cliaddr;
-	int n,i,m;
+	int n,m,screensize,i;
     socklen_t len;
     char mesg[MAXLINE];
 
@@ -117,18 +117,32 @@ int main(void)
         perror("bind error");
         exit(1);
     }
+	else
+		printf("bind ok...\n");
 
-
-    len = sizeof(cliaddr);
-	
-	sleep(2);
-	n = fb_get();
-	printf("the screen size is %d\n", n);
+	for(;;)
+    {
+        len = sizeof(cliaddr);
+        /* waiting for receiving data */
+        n = recvfrom(sockfd, mesg, MAXLINE, 0, (struct sockaddr *)&cliaddr, &len);
+		printf("recv from udp client: %s\n", mesg);
+		
+        /* sent data back to client */
+        sendto(sockfd, mesg, n, 0, (struct sockaddr *)&cliaddr, len);
+		printf("send to udp client: %s\n", mesg);
+		printf("\n");
+		
+		screensize = fb_get();
+		printf("the screen size is %d\n", screensize);
+		
+		for(i=0;i<screensize;i=i+1000){
 		/* sent data back to client */
-	for(i=0;i<n;i=i+100){
-		m =	sendto(sockfd, (fb_data+i), 100, 0, (struct sockaddr *)&cliaddr, len);
-		printf("really send %d bytes\n",m);
-	}
+		m =	sendto(sockfd, (fb_data+i), 1000, 0, (struct sockaddr *)&cliaddr, len);
+		printf("send %d bytes of framebuffer data\n",m);
+		printf("\n");
+		}
+    }
+
 
     return 0;
 }

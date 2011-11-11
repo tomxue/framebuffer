@@ -7,16 +7,17 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-//for framebuffer
-#include <unistd.h>	
+#include <unistd.h>
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <sys/mman.h>
 
-#define MAXLINE 38400
-#define SERV_PORT 8886
+#define BUFSIZE 2000
+#define SERV_PORT 8888
 
-int fb_set(char *fb_data)
+char recv_data[BUFSIZE];
+
+int fb_set(char *fb_data, int size, int pos)
 {
         int fbfd = 0;
         struct fb_var_screeninfo vinfo;
@@ -80,11 +81,11 @@ int fb_set(char *fb_data)
 	/* Where we are going to put the pixel */
 	// wrong formula: location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) + (y+vinfo.yoffset) * finfo.line_length; 
 
-	for(location=0;location<screensize;location++)	    
+	
+	for(location=pos;location<(pos+size);location++)	    
 	{	
-        	*(fbp + location) = *(fb_data+location); //*(fbp + screensize -2 -location); //0xbb; /* blue color depth */
-	}
-  
+        	*(fbp + location) = fb_data[location-pos]; //*(fbp + screensize -2 -location); //0xbb; /* blue color depth */
+	}  
   
       munmap(fbp, screensize);  /* release the memory */
       close(fbfd); 
@@ -92,14 +93,17 @@ int fb_set(char *fb_data)
 }
 
 
-
 int main(int argc, char **argv)
 {
     int sockfd;
     struct sockaddr_in servaddr;
-    int n;
-    char recv_data[MAXLINE];
+	int n,m,size, pos;
+    char sendline[80] = "from N900 udp client";	
     
+	size = 1000;
+	pos = 0;
+	memset(recv_data, 0x33, BUFSIZE);
+	
     /* check args */
     if(argc != 2)
     {
@@ -118,9 +122,7 @@ int main(int argc, char **argv)
         exit(1);
     }
     
-    sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);    
-
-    
+    sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     
     /* connect to server */
     if(connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) == -1)
@@ -131,18 +133,24 @@ int main(int argc, char **argv)
 	else
 		printf("connect OK...\n");
 
-	
-        /* receive data from server */
-        n = read(sockfd, recv_data, MAXLINE);
-        if(n == -1)
-        {
-            perror("read error");
-            exit(1);
-        }
-		else
-			printf("read OK...");
 		
-	fb_set(recv_data);
-   
+        /* send to server */
+        m = write(sockfd, sendline, strlen(sendline));
+		printf("The real sent data account is %d\n", m);
+		
+        /* receive "from N900 udp client" from server */
+        n = read(sockfd, recv_data, m);
+		printf("The real recv data account is %d\n", n);
+		
+		while(1){
+		/* receive "from N900 udp client" from server */
+        n = read(sockfd, recv_data, size);
+		pos = pos + size;
+		printf("UDP client recv frame buffer data %d bytes\n",n);
+		printf("\n");		
+		
+		fb_set(recv_data, size, pos);
+		}
+	
     return 0;
 }
