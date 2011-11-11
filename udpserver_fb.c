@@ -12,6 +12,7 @@
 
 #define MAXLINE 80
 #define SERV_PORT 8888
+#define debug 0
 
 char fb_data[2000000];
 
@@ -30,38 +31,38 @@ int fb_get()
         /* open device*/
         fbfd = open("/dev/fb0", O_RDWR);
         if (!fbfd) {
-                printf("Error: cannot open framebuffer device.\n");
+                if(debug) printf("Error: cannot open framebuffer device.\n");
                 exit(1);
         }
-        printf("The framebuffer device was opened successfully.\n");
+        if(debug) printf("The framebuffer device was opened successfully.\n");
        
         /* Get fixed screen information */
         if (ioctl(fbfd, FBIOGET_FSCREENINFO, &finfo)) {
-                printf("Error reading fixed information.\n");
+                if(debug) printf("Error reading fixed information.\n");
                 //exit(2);
         }
  
         /* Get variable screen information */
         if (ioctl(fbfd, FBIOGET_VSCREENINFO, &vinfo)) {
-                printf("Error reading variable information.\n");
+                if(debug) printf("Error reading variable information.\n");
                 //exit(3);
         }
 /* show these information*/
- printf("vinfo.xres=%d\n",vinfo.xres);
- printf("vinfo.yres=%d\n",vinfo.yres);
- printf("vinfo.xres_virtual=%d\n",vinfo.xres_virtual);
- printf("vinfo.yres_virtual=%d\n",vinfo.yres_virtual);
- printf("vinfo.height=%d\n",vinfo.height);
- printf("vinfo.width=%d\n",vinfo.width);
- printf("vinfo.bits_per_bits=%d\n",vinfo.bits_per_pixel);
- printf("vinfo.xoffset=%d\n",vinfo.xoffset);
- printf("vinfo.yoffset=%d\n",vinfo.yoffset);
- printf("finfo.line_length=%d\n",finfo.line_length);
- printf("finfo.smem_len=%d\n",finfo.smem_len);
+ if(debug) printf("vinfo.xres=%d\n",vinfo.xres);
+ if(debug) printf("vinfo.yres=%d\n",vinfo.yres);
+ if(debug) printf("vinfo.xres_virtual=%d\n",vinfo.xres_virtual);
+ if(debug) printf("vinfo.yres_virtual=%d\n",vinfo.yres_virtual);
+ if(debug) printf("vinfo.height=%d\n",vinfo.height);
+ if(debug) printf("vinfo.width=%d\n",vinfo.width);
+ if(debug) printf("vinfo.bits_per_bits=%d\n",vinfo.bits_per_pixel);
+ if(debug) printf("vinfo.xoffset=%d\n",vinfo.xoffset);
+ if(debug) printf("vinfo.yoffset=%d\n",vinfo.yoffset);
+ if(debug) printf("finfo.line_length=%d\n",finfo.line_length);
+ if(debug) printf("finfo.smem_len=%d\n",finfo.smem_len);
 
         /* Figure out the size of the screen in bytes */
         screensize = vinfo.yres_virtual * finfo.line_length;
-		printf("screensize is %d\n", screensize);
+		if(debug) printf("screensize is %d\n", screensize);
 	//screensize = finfo.smem_len;  //same to above formula
         int bytes_per_pixel = vinfo.bits_per_pixel/8;
         
@@ -70,11 +71,11 @@ int fb_get()
                 fbfd, 0);      
         if ((int)fbp == -1) 
 		{ 
-			printf("Error: failed to map framebuffer device to memory.\n"); 
+			if(debug) printf("Error: failed to map framebuffer device to memory.\n"); 
 			exit(4);
         	}
-        printf("The framebuffer device was mapped to memory successfully.\n");
-	printf("fbp=%p\n",fbp);
+        if(debug) printf("The framebuffer device was mapped to memory successfully.\n");
+	if(debug) printf("fbp=%p\n",fbp);
 
 	//memset(fbp,0,screensize);
         
@@ -118,28 +119,28 @@ int main(void)
         exit(1);
     }
 	else
-		printf("bind ok...\n");
+		if(debug) printf("bind ok...\n");
 
-	for(;;)
-    {
-        len = sizeof(cliaddr);
+	len = sizeof(cliaddr);
         /* waiting for receiving data */
         n = recvfrom(sockfd, mesg, MAXLINE, 0, (struct sockaddr *)&cliaddr, &len);
-		printf("recv from udp client: %s\n", mesg);
+		if(debug) printf("recv from udp client: %s\n", mesg);
 		
         /* sent data back to client */
         sendto(sockfd, mesg, n, 0, (struct sockaddr *)&cliaddr, len);
-		printf("send to udp client: %s\n", mesg);
-		printf("\n");
-		
+		if(debug) printf("send to udp client: %s\n", mesg);
+		if(debug) printf("\n");
+	
+	for(;;)
+    {	
 		screensize = fb_get();
-		printf("the screen size is %d\n", screensize);
+		if(debug) printf("the screen size is %d\n", screensize);
 		
-		for(i=0;i<screensize;i=i+1000){
+		for(i=0;i<(screensize-1000);i=i+1000){
 		/* sent data back to client */
 		m =	sendto(sockfd, (fb_data+i), 1000, 0, (struct sockaddr *)&cliaddr, len);
-		printf("send %d bytes of framebuffer data\n",m);
-		printf("\n");
+		if(debug) printf("send %d bytes of framebuffer data\n",m);
+		if(debug) printf("\n");
 		}
     }
 
